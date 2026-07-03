@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活動預約與管理系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 250px; border-radius: 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen pb-12">
+
+    <nav class="bg-indigo-600 text-white p-4 shadow-md mb-6">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-wide">📅 活動預約系統</h1>
+            <div>
+                <button onclick="switchView('user')" id="btn-user" class="px-4 py-2 rounded bg-white text-indigo-600 font-semibold mr-2 cursor-pointer shadow">切換至：用戶預約</button>
+                <button onclick="switchView('admin')" id="btn-admin" class="px-4 py-2 rounded bg-indigo-700 text-white font-semibold cursor-pointer border border-indigo-400">切換至：後台管理</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-4">
+        
+        <div id="user-view" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-md space-y-4">
+                <img id="display-img" class="w-full h-64 object-cover rounded-lg bg-gray-200" src="https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80" alt="活動圖片">
+                <div class="border-b pb-4">
+                    <span id="display-price" class="float-right text-2xl font-bold text-indigo-600">NT$ 0</span>
+                    <h2 id="display-title" class="text-2xl font-bold text-gray-800">載入中...</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
+                    <div>📌 <b>活動地點：</b><span id="display-location">載入中...</span></div>
+                    <div>📆 <b>活動日期：</b><span id="display-date">載入中...</span></div>
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">📍 活動地點地圖</label>
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md h-fit">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">填寫預約資料</h3>
+                <form id="booking-form" onsubmit="handleBooking(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">預約大名</label>
+                        <input type="text" id="user-name" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-indigo-500" placeholder="請輸入姓名">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">電子郵件</label>
+                        <input type="email" id="user-email" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-indigo-500" placeholder="example@mail.com">
+                        <p class="text-xs text-gray-400 mt-1">*預訂成功將會寄送郵件通知</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">選擇預約時間段</label>
+                        <select id="user-slot" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-indigo-500"></select>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition duration-200 cursor-pointer shadow">確認預約</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="admin-view" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-md space-y-4">
+                <h3 class="text-lg font-bold text-gray-800 border-b pb-2">⚙️ 修改活動設定</h3>
+                <form id="admin-form" onsubmit="saveSettings(event)" class="space-y-3 text-sm">
+                    <div>
+                        <label class="block font-medium text-gray-700">活動名稱 (主題)</label>
+                        <input type="text" id="admin-title" required class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700">活動日期</label>
+                        <input type="date" id="admin-date" required class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700">活動地點</label>
+                        <input type="text" id="admin-location" required class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500" placeholder="例如：台北101">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700">票券價格 (NT$)</label>
+                        <input type="number" id="admin-price" required class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700">可預約時間段 (半形逗號隔開)</label>
+                        <input type="text" id="admin-slots" required class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500" placeholder="10:00-12:00, 14:00-16:00">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700">活動主題圖片網址</label>
+                        <input type="text" id="admin-img" class="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-indigo-500" placeholder="https://...">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded transition cursor-pointer">儲存並更新設定</button>
+                </form>
+            </div>
+
+            <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                <div class="flex justify-between items-center border-b pb-2 mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">📩 管理員通知中心 (預約名單)</h3>
+                    <button onclick="clearBookings()" class="text-xs text-red-500 hover:underline cursor-pointer">清空所有紀錄</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700">
+                                <th class="p-2 border">序號</th>
+                                <th class="p-2 border">姓名</th>
+                                <th class="p-2 border">Email</th>
+                                <th class="p-2 border">預約時段</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-booking-list" class="text-gray-600">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999]">
+        <div class="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl relative">
+            <div class="text-center text-emerald-500 mb-2">
+                <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h3 class="text-xl font-bold text-center text-gray-800 mb-4" id="modal-title">預約成功！</h3>
+            <div id="modal-content" class="bg-gray-50 p-4 rounded text-sm text-gray-600 space-y-2 mb-4">
+                </div>
+            <button onclick="closeModal()" class="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700 cursor-pointer">確定</button>
+        </div>
+    </div>
+
+    <script>
+        // 預設活動資料 (若 LocalStorage 沒資料則採用)
+        const defaultSettings = {
+            title: "2026 全球科技與 AI 創新論壇",
+            date: "2026-08-15",
+            location: "台北市信義區信義路五段7號 (台北101)",
+            price: 1200,
+            slots: ["10:00-12:00", "13:30-15:30", "16:00-18:00"],
+            imgUrl: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80"
+        };
+
+        let currentSettings = JSON.parse(localStorage.getItem('act_settings')) || defaultSettings;
+        let bookings = JSON.parse(localStorage.getItem('act_bookings')) || [];
+        let nextSerial = parseInt(localStorage.getItem('act_serial')) || 1;
+        let map, marker;
+
+        // 初始化頁面
+        window.onload = function() {
+            initMap();
+            renderPage();
+            fillAdminForm();
+        };
+
+        // 地圖初始化 (Leaflet)
+        function initMap() {
+            // 預設經緯度為台北101附近
+            map = L.map('map').setView([25.033964, 121.564468], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            marker = L.marker([25.033964, 121.564468]).addTo(map);
+        }
+
+        // 模擬地理編碼 (因為是純前端，我們用簡單的關鍵字模擬地圖錨點變更)
+        function updateMapLocation(locationText) {
+            if (!map) return;
+            // 簡易模擬：如果包含高雄、台中、台北等關鍵字則跳轉到對應大致座標
+            let coords = [25.033964, 121.564468]; // 台北101
+            if (locationText.includes("高雄")) coords = [22.6273, 120.3014];
+            else if (locationText.includes("台中")) coords = [24.1477, 120.6736];
+            else if (locationText.includes("台南")) coords = [22.9997, 120.2270];
+
+            map.setView(coords, 15);
+            marker.setLatLng(coords).bindPopup(locationText).openPopup();
+        }
+
+        // 渲染頁面資料
+        function renderPage() {
+            // 前端用戶頁面更新
+            document.getElementById('display-title').innerText = currentSettings.title;
+            document.getElementById('display-date').innerText = currentSettings.date;
+            document.getElementById('display-location').innerText = currentSettings.location;
+            document.getElementById('display-price').innerText = `NT$ ${currentSettings.price}`;
+            document.getElementById('display-img').src = currentSettings.imgUrl || defaultSettings.imgUrl;
+
+            // 動態生成預約時間下拉選單
+            const slotSelect = document.getElementById('user-slot');
+            slotSelect.innerHTML = "";
+            currentSettings.slots.forEach(slot => {
+                let opt = document.createElement('option');
+                opt.value = slot;
+                opt.innerText = slot;
+                slotSelect.appendChild(opt);
+            });
+
+            // 後台名單更新
+            const listContainer = document.getElementById('admin-booking-list');
+            listContainer.innerHTML = bookings.length === 0 ? `<tr><td colspan="4" class="text-center p-4 text-gray-400">目前尚無預約資料</td></tr>` : "";
+            bookings.forEach(b => {
+                let row = `<tr>
+                    <td class="p-2 border font-mono text-indigo-600 font-bold">${b.serial}</td>
+                    <td class="p-2 border">${b.name}</td>
+                    <td class="p-2 border">${b.email}</td>
+                    <td class="p-2 border">${b.slot}</td>
+                </tr>`;
+                listContainer.innerHTML += row;
+            });
+
+            updateMapLocation(currentSettings.location);
+        }
+
+        // 填充後台表單欄位
+        function fillAdminForm() {
+            document.getElementById('admin-title').value = currentSettings.title;
+            document.getElementById('admin-date').value = currentSettings.date;
+            document.getElementById('admin-location').value = currentSettings.location;
+            document.getElementById('admin-price').value = currentSettings.price;
+            document.getElementById('admin-slots').value = currentSettings.slots.join(', ');
+            document.getElementById('admin-img').value = currentSettings.imgUrl;
+        }
+
+        // 切換前端與後台視圖
+        function switchView(view) {
+            const userView = document.getElementById('user-view');
+            const adminView = document.getElementById('admin-view');
+            const btnUser = document.getElementById('btn-user');
+            const btnAdmin = document.getElementById('btn-admin');
+
+            if (view === 'user') {
+                userView.classList.remove('hidden');
+                adminView.classList.add('hidden');
+                btnUser.className = "px-4 py-2 rounded bg-white text-indigo-600 font-semibold mr-2 cursor-pointer shadow";
+                btnAdmin.className = "px-4 py-2 rounded bg-indigo-700 text-white font-semibold cursor-pointer border border-indigo-400";
+                // 重新觸發地圖渲染大小計算
+                setTimeout(() => map.invalidateSize(), 100);
+            } else {
+                userView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                btnUser.className = "px-4 py-2 rounded bg-indigo-700 text-white font-semibold mr-2 cursor-pointer border border-indigo-400";
+                btnAdmin.className = "px-4 py-2 rounded bg-white text-indigo-600 font-semibold cursor-pointer shadow";
+            }
+        }
+
+        // 處理用戶提交預約
+        function handleBooking(e) {
+            e.preventDefault();
+            const name = document.getElementById('user-name').value;
+            const email = document.getElementById('user-email').value;
+            const slot = document.getElementById('user-slot').value;
+
+            // 產生 KMG-XXXX 序號格式
+            const serialStr = `KMG-${String(nextSerial).padStart(4, '0')}`;
+            
+            const newBooking = {
+                serial: serialStr,
+                name: name,
+                email: email,
+                slot: slot
+            };
+
+            bookings.push(newBooking);
+            nextSerial++;
+
+            // 儲存至 LocalStorage
+            localStorage.setItem('act_bookings', JSON.stringify(bookings));
+            localStorage.setItem('act_serial', nextSerial);
+
+            // 更新畫面
+            renderPage();
+
+            // 彈出模擬通知視窗 (包含用戶信件通知 + 管理員收到通知意象)
+            showModal(newBooking);
+            document.getElementById('booking-form').reset();
+        }
+
+        // 後台儲存設定
+        function saveSettings(e) {
+            e.preventDefault();
+            const slotsArray = document.getElementById('admin-slots').value.split(',').map(s => s.trim());
+            
+            currentSettings = {
+                title: document.getElementById('admin-title').value,
+                date: document.getElementById('admin-date').value,
+                location: document.getElementById('admin-location').value,
+                price: parseInt(document.getElementById('admin-price').value),
+                slots: slotsArray,
+                imgUrl: document.getElementById('admin-img').value
+            };
+
+            localStorage.setItem('act_settings', JSON.stringify(currentSettings));
+            renderPage();
+            alert("⚙️ 後台設定修改成功！已即時同步更新至前端預約網頁。");
+            switchView('user');
+        }
+
+        // 清空所有紀錄
+        function clearBookings() {
+            if(confirm("確定要清空所有預約名單，並重置序號嗎？")) {
+                bookings = [];
+                nextSerial = 1;
+                localStorage.removeItem('act_bookings');
+                localStorage.setItem('act_serial', nextSerial);
+                renderPage();
+            }
+        }
+
+        // 顯示模擬通知彈窗
+        function showModal(booking) {
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('modal-content');
+            
+            content.innerHTML = `
+                <div class="border-b pb-2 mb-2">
+                    <p class="font-bold text-indigo-600">📧 【系統自動發信】通知預約者：</p>
+                    <p>親愛的 <b>${booking.name}</b> 您好：</p>
+                    <p>您已成功預約活動 <b>《${currentSettings.title}》</b>。</p>
+                    <p>🎟️ 入場序號：<span class="font-mono font-bold bg-yellow-100 px-1 rounded text-red-600">${booking.serial}</span></p>
+                    <p>⏰ 入場時間區段：<b>${currentSettings.date} 於 ${booking.slot}</b></p>
+                    <p>📍 活動地點：${currentSettings.location}</p>
+                </div>
+                <div>
+                    <p class="font-bold text-emerald-600">🔔 【管理員後台通知】：</p>
+                    <p>管理員您好，系統收到一筆來自 <b>${booking.name} (${booking.email})</b> 的新預約，序號 ${booking.serial}，已自動同步至管理後台清單。</p>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
